@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from apps.utils.logger import TerraLogUtil
 
 
 class BaseSlotFiller:
@@ -151,15 +150,15 @@ class SlotFiller(BaseSlotFiller):
             try:
                 new_slots = future.result(timeout=self.llm_timeout)
                 if not isinstance(new_slots, dict):
-                    logger.warning("LLM slot filler returned non-dict, ignored.")
+                    TerraLogUtil.warning("LLM slot filler returned non-dict, ignored.")
                     return current_slots
                 merged = dict(current_slots)
                 merged.update(new_slots)
                 return merged
             except FuturesTimeoutError:
-                logger.warning("LLM slot filling timed out, degraded.")
+                TerraLogUtil.warning("LLM slot filling timed out, degraded.")
             except Exception:
-                logger.exception("LLM slot filling failed, degraded.")
+                TerraLogUtil.exception("LLM slot filling failed, degraded.")
         return current_slots
 
 
@@ -405,7 +404,3 @@ class XwCustomSlotFiller(BaseSlotFiller):
             "start_time": str(start_time),
             "end_time": str(end_time)
         }
-
-
-
-

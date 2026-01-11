@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,7 +12,7 @@ from .fsm_processor import FSMProcessor
 from .slot_filler import SlotFiller, BaseSlotFiller
 from ..utils.text_processor import BaseTextProcessor
 
-logger = logging.getLogger(__name__)
+from apps.utils.logger import TerraLogUtil
 
 UNKNOWN_INTENT = "unknown"
 
@@ -51,7 +50,7 @@ class ConfigManager:
     def _load_json(self, filename: str) -> Dict[str, Any]:
         path = self.config_dir / filename
         if not path.exists():
-            logger.warning("Config file not found: %s", path)
+            TerraLogUtil.warning("Config file not found: %s", path)
             return {}
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
@@ -65,7 +64,7 @@ class ConfigManager:
 
         # 自动发现并加载所有 JSON 文件
         if not self.config_dir.exists():
-            logger.warning("Config directory not found: %s", self.config_dir)
+            TerraLogUtil.warning("Config directory not found: %s", self.config_dir)
             return
 
         for json_file in self.config_dir.glob("*.json"):
@@ -83,7 +82,7 @@ class ConfigManager:
                     if not hasattr(self, key):
                         setattr(self, key, value)
 
-            logger.debug("Loaded config file: %s", json_file.name)
+            TerraLogUtil.debug("Loaded config file: %s", json_file.name)
 
     def reload(self) -> None:
         self._load_all()
@@ -204,7 +203,7 @@ class RuleEngine:
             try:
                 return self.text_processor.preprocess(text, context)
             except Exception:
-                logger.exception("Text preprocess failed, fallback to raw text.")
+                TerraLogUtil.exception("Text preprocess failed, fallback to raw text.")
                 return text
         # 默认简单处理，可根据需要扩展
         return text.strip()
@@ -229,9 +228,9 @@ class RuleEngine:
                     if result is not None:
                         results.append(result)
                 except FuturesTimeoutError:
-                    logger.warning("Recognizer %s timed out, degraded.", recognizer.name)
+                    TerraLogUtil.warning("Recognizer %s timed out, degraded.", recognizer.name)
                 except Exception:
-                    logger.exception("Recognizer %s failed, degraded.", recognizer.name)
+                    TerraLogUtil.exception("Recognizer %s failed, degraded.", recognizer.name)
 
         return results
 
@@ -285,10 +284,10 @@ class RuleEngine:
             for filler in self.slot_fillers:
                 if filler.name == specified_filler_name:
                     selected_filler = filler
-                    logger.debug("Using specified slot filler: %s", specified_filler_name)
+                    TerraLogUtil.debug("Using specified slot filler: %s", specified_filler_name)
                     break
             else:
-                logger.warning(
+                TerraLogUtil.warning(
                     "Specified slot filler '%s' not found, using default: %s",
                     specified_filler_name,
                     selected_filler.name

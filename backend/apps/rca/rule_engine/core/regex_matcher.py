@@ -1,11 +1,6 @@
 from __future__ import annotations
-
-import logging
 import re
 from typing import Any, Dict, List, Optional
-
-logger = logging.getLogger(__name__)
-
 
 class RegexMatcher:
     """
@@ -55,7 +50,7 @@ class RegexMatcher:
         """
         # 需要导入 IntentResult，为避免循环导入，在函数内导入
         from .rule_engine import IntentResult
-        
+
         if not self._compiled_patterns:
             return None
 

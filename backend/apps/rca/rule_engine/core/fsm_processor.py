@@ -1,9 +1,5 @@
 from __future__ import annotations
-
-import logging
 from typing import Any, Dict, Optional
-
-logger = logging.getLogger(__name__)
 
 
 class FSMProcessor:
@@ -37,10 +33,10 @@ class FSMProcessor:
         注意：支持基于上下文的意图延续
         """
         from .rule_engine import IntentResult
-        
+
         context = context or {}
         last_intent = context.get("last_intent")
-        
+
         # 如果存在上下文且文本较短/模糊，尝试延续上一轮意图
         if last_intent and len(text.strip()) < 10:
             return IntentResult(
@@ -51,6 +47,6 @@ class FSMProcessor:
                 raw_matches={"source": "last_intent"},
                 metadata={"fsm_reason": "continue_last_intent"},
             )
-        
+
         # 其他情况返回 None，由其他识别器处理
         return None

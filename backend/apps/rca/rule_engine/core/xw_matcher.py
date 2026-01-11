@@ -10,6 +10,9 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from .rule_engine import BaseIntentRecognizer, IntentResult
 
+from apps.utils.logger import TerraLogUtil
+
+
 class XwCustomMatcher(BaseIntentRecognizer):
     """自定义识别器,识别 execl 表格数据
     
@@ -20,7 +23,7 @@ class XwCustomMatcher(BaseIntentRecognizer):
     - 只有当 context 中明确指定了 'trigger_excel' 为 True 时才会执行
     - 配置支持动态传入，可以在运行时指定不同的 Excel 文件
     """
-    
+
     def __init__(self, config=None, name: str = "ExcelIntentRecognizer", priority: int = 200):
         """初始化 Excel 识别器
         
@@ -32,14 +35,15 @@ class XwCustomMatcher(BaseIntentRecognizer):
         """
         super().__init__(name, priority)
         self.config = config
-        
+
         # 从配置中加载默认参数
         if config and hasattr(config, 'excel_analyzer'):
             excel_config = config.excel_analyzer
             self.default_duration_threshold = excel_config.get('duration_threshold', 15.0)
             self.default_ignore_no_interruption = excel_config.get('ignore_no_interruption', True)
             self.default_excel_type = excel_config.get('default_excel_type', 'merged')
-            self.segment_pattern = excel_config.get('segment_pattern', r'^(\d{8}-\d+-\d+-\d+-\d+-CSCN-[AB]\d{4}-CSCN-[AB]\d{4})$')
+            self.segment_pattern = excel_config.get('segment_pattern',
+                                                    r'^(\d{8}-\d+-\d+-\d+-\d+-CSCN-[AB]\d{4}-CSCN-[AB]\d{4})$')
             self.excel_types_config = excel_config.get('excel_types', {})
         else:
             # 如果没有配置，使用默认值
@@ -48,10 +52,10 @@ class XwCustomMatcher(BaseIntentRecognizer):
             self.default_excel_type = 'merged'
             self.segment_pattern = r'^(\d{8}-\d+-\d+-\d+-\d+-CSCN-[AB]\d{4}-CSCN-[AB]\d{4})$'
             self.excel_types_config = {}
-        
+
         # 编译正则表达式
         self.compiled_pattern = re.compile(self.segment_pattern)
-        
+
     def _parse_duration(self, duration_str: Any) -> Optional[float]:
         """解析中断时长字符串，提取总时长
         
@@ -63,11 +67,11 @@ class XwCustomMatcher(BaseIntentRecognizer):
         """
         if pd.isna(duration_str):
             return None
-        
+
         try:
             # 将字符串转换为字符串类型（以防万一）
             duration_str = str(duration_str)
-            
+
             # 提取括号前的数字（总时长）
             match = re.match(r'^([0-9.]+)', duration_str)
             if match:
@@ -75,7 +79,7 @@ class XwCustomMatcher(BaseIntentRecognizer):
             return None
         except (ValueError, AttributeError):
             return None
-    
+
     def _read_sheet_data(self, execl_path: str, sheet_name: str) -> pd.DataFrame:
         """读取指定 sheet 的全部内容
         
@@ -87,8 +91,8 @@ class XwCustomMatcher(BaseIntentRecognizer):
             pd.DataFrame: 读取的数据
         """
         return pd.read_excel(execl_path, sheet_name=sheet_name)
-    
-    def _parse_sheet_data(self, execl_path: str, sheet_name: str, duration_threshold: float = 15.0, 
+
+    def _parse_sheet_data(self, execl_path: str, sheet_name: str, duration_threshold: float = 15.0,
                           ignore_no_interruption: bool = True, excel_type: str = 'merged',
                           segment_pattern: str = None) -> List[Dict[str, Dict[str, float]]]:
         """解析指定 sheet 的数据，过滤中断时长大于阈值的记录
@@ -109,13 +113,13 @@ class XwCustomMatcher(BaseIntentRecognizer):
         """
         # 存储联通子段的数据，用于最后排序
         segment_data = []
-        
+
         # 将秒转换为分钟（Excel中的时长单位是分钟）
         threshold_minutes = duration_threshold / 60.0
-        
+
         # 读取指定 sheet
         df = self._read_sheet_data(execl_path, sheet_name)
-        
+
         # 根据 Excel 类型处理数据
         if excel_type == 'merged':
             # 旧格式：向前填充联通子段名称和理论开始时间（因为Excel使用了行合并）
@@ -126,35 +130,35 @@ class XwCustomMatcher(BaseIntentRecognizer):
             # 即使是 standardized 格式，也可能存在行合并，需要先填充空值
             df['联通子段名称'] = df['联通子段名称'].ffill()
             df['理论开始时间'] = df['理论开始时间'].ffill()
-            
+
             if segment_pattern:
                 # 如果提供了正则表达式，则用其过滤联通子段名称
                 pattern = re.compile(segment_pattern)
                 df = df[df['联通子段名称'].apply(lambda x: bool(pattern.match(str(x))) if pd.notna(x) else False)]
-        
+
         # 解析中断时长列
         df['中断时长_parsed'] = df['中断时长'].apply(self._parse_duration)
-        
+
         if ignore_no_interruption:
             # 只返回有中断时长大于阈值的记录
             filtered_df = df[
-                df['中断时长_parsed'].notna() & 
+                df['中断时长_parsed'].notna() &
                 (df['中断时长_parsed'] > threshold_minutes)
-            ]
-            
+                ]
+
             # 按联通子段名称分组处理
             for segment_name, group in filtered_df.groupby('联通子段名称'):
                 # 获取该联通子段的理论开始时间和理论结束时间（用于排序）
                 start_time = group['理论开始时间'].iloc[0]
                 end_time = group['理论结束时间'].iloc[0]
-                
+
                 # 构建子段卫星名称到中断时长的映射
                 satellite_disruptions = {}
                 for _, row in group.iterrows():
                     satellite_name = row['子段卫星名称']
                     disruption_time = row['中断时长_parsed']
                     satellite_disruptions[satellite_name] = disruption_time
-                
+
                 # 添加到结果列表
                 segment_data.append({
                     'start_time': start_time,
@@ -169,13 +173,13 @@ class XwCustomMatcher(BaseIntentRecognizer):
                 # 获取该联通子段的理论开始时间和理论结束时间（用于排序）
                 start_time = group['理论开始时间'].iloc[0]
                 end_time = group['理论结束时间'].iloc[0]
-                
+
                 # 过滤出中断时长大于阈值的记录
                 filtered_group = group[
-                    group['中断时长_parsed'].notna() & 
+                    group['中断时长_parsed'].notna() &
                     (group['中断时长_parsed'] > threshold_minutes)
-                ]
-                
+                    ]
+
                 if len(filtered_group) > 0:
                     # 有中断时长大于阈值的卫星
                     satellite_disruptions = {}
@@ -183,7 +187,7 @@ class XwCustomMatcher(BaseIntentRecognizer):
                         satellite_name = row['子段卫星名称']
                         disruption_time = row['中断时长_parsed']
                         satellite_disruptions[satellite_name] = disruption_time
-                    
+
                     segment_data.append({
                         'start_time': start_time,
                         'end_time': end_time,
@@ -198,10 +202,10 @@ class XwCustomMatcher(BaseIntentRecognizer):
                         'segment_name': segment_name,
                         'satellites': None
                     })
-        
+
         # 按理论开始时间排序（从小到大）
         segment_data.sort(key=lambda x: x['start_time'])
-        
+
         # 构建最终输出格式
         results = []
         for item in segment_data:
@@ -212,9 +216,9 @@ class XwCustomMatcher(BaseIntentRecognizer):
                     'satellites': item['satellites']
                 }
             })
-        
+
         return results
-    
+
     def parse_all_sheets(self, duration_threshold: float = 15.0) -> List[Dict[str, Dict[str, float]]]:
         """读取所有 sheet 的数据，过滤中断时长大于阈值的记录
         
@@ -227,44 +231,44 @@ class XwCustomMatcher(BaseIntentRecognizer):
         """
         # 读取所有 sheet 名称
         xls = pd.ExcelFile(self.execl_path)
-        
+
         # 存储所有联通子段的数据，用于最后排序
         all_segment_data = []
-        
+
         # 将秒转换为分钟
         threshold_minutes = duration_threshold / 60.0
-        
+
         for sheet_name in xls.sheet_names:
             # 读取当前 sheet
             df = self._read_sheet_data(sheet_name)
-            
+
             # 向前填充联通子段名称、理论开始时间和理论结束时间（因为Excel使用了行合并，每个子段的名称和时间只在第一行出现）
             df['联通子段名称'] = df['联通子段名称'].ffill()
             df['理论开始时间'] = df['理论开始时间'].ffill()
             df['理论结束时间'] = df['理论结束时间'].ffill()
-            
+
             # 解析中断时长列
             df['中断时长_parsed'] = df['中断时长'].apply(self._parse_duration)
-            
+
             # 过滤中断时长大于阈值的记录
             filtered_df = df[
-                df['中断时长_parsed'].notna() & 
+                df['中断时长_parsed'].notna() &
                 (df['中断时长_parsed'] > threshold_minutes)
-            ]
-            
+                ]
+
             # 按联通子段名称分组处理
             for segment_name, group in filtered_df.groupby('联通子段名称'):
                 # 获取该联通子段的理论开始时间和理论结束时间（用于排序）
                 start_time = group['理论开始时间'].iloc[0]
                 end_time = group['理论结束时间'].iloc[0]
-                
+
                 # 构建子段卫星名称到中断时长的映射
                 satellite_disruptions = {}
                 for _, row in group.iterrows():
                     satellite_name = row['子段卫星名称']
                     disruption_time = row['中断时长_parsed']
                     satellite_disruptions[satellite_name] = disruption_time
-                
+
                 # 添加到结果列表
                 all_segment_data.append({
                     'start_time': start_time,
@@ -272,10 +276,10 @@ class XwCustomMatcher(BaseIntentRecognizer):
                     'segment_name': segment_name,
                     'satellites': satellite_disruptions
                 })
-        
+
         # 按理论开始时间排序（从小到大）
         all_segment_data.sort(key=lambda x: x['start_time'])
-        
+
         # 构建最终输出格式
         all_results = []
         for item in all_segment_data:
@@ -286,7 +290,7 @@ class XwCustomMatcher(BaseIntentRecognizer):
                     'satellites': item['satellites']
                 }
             })
-        
+
         return all_results
 
     def parse(self, text: str, context: Dict[str, Any] | None = None) -> Optional[IntentResult]:
@@ -344,15 +348,15 @@ class XwCustomMatcher(BaseIntentRecognizer):
         """
         if context is None:
             context = {}
-        
+
         # **关键：按需触发机制**
         # 只有明确设置 trigger_excel 为 True 时才执行
         if not context.get('trigger_excel', False):
             return None
-        
+
         # 获取 excel_type 并根据类型决定使用哪个配置
         excel_type = context.get('excel_type', self.default_excel_type)
-        
+
         # 根据 excel_type 获取对应的配置
         if excel_type in self.excel_types_config:
             type_config = self.excel_types_config[excel_type]
@@ -361,24 +365,24 @@ class XwCustomMatcher(BaseIntentRecognizer):
         else:
             # 如果配置中没有该类型，返回 None
             return None
-        
+
         # 从 context 或配置中获取参数
         execl_path = context.get('execl_path', default_path)
         sheet_name = context.get('sheet_name', default_sheet)
         duration_threshold = context.get('duration_threshold', self.default_duration_threshold)
         ignore_no_interruption = context.get('ignore_no_interruption', self.default_ignore_no_interruption)
         segment_pattern = context.get('segment_pattern', self.segment_pattern)
-        
+
         # 验证必要参数
         if not execl_path or not sheet_name:
             return None
-        
+
         try:
             # 解析 sheet 数据
             parsed_data = self._parse_sheet_data(
-                execl_path, 
-                sheet_name, 
-                duration_threshold, 
+                execl_path,
+                sheet_name,
+                duration_threshold,
                 ignore_no_interruption,
                 excel_type,
                 segment_pattern
@@ -404,5 +408,5 @@ class XwCustomMatcher(BaseIntentRecognizer):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Excel parsing error: {e}")
-            print("Excel parsing error:", e)
+            TerraLogUtil.exception("Excel parsing error:", e)
             return None
