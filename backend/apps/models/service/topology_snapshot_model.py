@@ -25,8 +25,8 @@ class TopologySnapshotDBModel(SQLModel, table=True):
     link_count: int = Field(sa_column=Column(Integer, default=0, comment='链路数量'))
     description: str = Field(sa_column=Column(String(500), nullable=True, comment='快照描述'))
     extra_metadata: dict = Field(sa_column=Column(JSON, nullable=True, comment='额外元数据'))
-    created_at: datetime = Field(sa_column=Column(DateTime, default=func.now(), comment='创建时间'))
-    updated_at: datetime = Field(sa_column=Column(DateTime, default=func.now(), onupdate=func.now(), comment='更新时间'))
+    created_at: datetime = Field(sa_column=Column(DateTime, nullable=False, default=func.now(), comment='创建时间'))
+    updated_at: datetime = Field(sa_column=Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment='更新时间'))
     
     # def to_dict(self):
     #     """转换为字典"""

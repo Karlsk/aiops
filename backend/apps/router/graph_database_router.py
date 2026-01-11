@@ -33,7 +33,7 @@ async def get_all_labels(
 ):
     """获取所有节点标签"""
     try:
-        labels = service.get_all_labels(graph_session)
+        labels = await service.get_all_labels(graph_session)
         return Neo4jLabelsResponse(labels=labels)
     except HTTPException:
         raise
@@ -54,7 +54,7 @@ async def get_all_relationship_types(
 ):
     """获取所有关系类型"""
     try:
-        relationship_types = service.get_all_relationship_types(graph_session)
+        relationship_types = await service.get_all_relationship_types(graph_session)
         return Neo4jRelationshipTypesResponse(relationship_types=relationship_types)
     except HTTPException:
         raise

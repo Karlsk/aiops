@@ -39,7 +39,7 @@ async def get_all_positions(
 ):
     """获取所有节点位置"""
     try:
-        positions = service.get_all_positions(session, database)
+        positions = await service.get_all_positions(session, database)
         return ApiResponse(
             status="success",
             message="获取节点位置成功",

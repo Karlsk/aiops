@@ -302,7 +302,8 @@ class GraphDatabaseService:
                 relationship_type, relationship_properties or {}, database=database
             )
 
-            if not result:
+            # result为None才表示失败，空字典{}表示成功但没有返回数据
+            if result is None:
                 raise HTTPException(status_code=500, detail="Failed to create relationship")
 
             return {
@@ -921,7 +922,7 @@ class GraphDatabaseService:
             TerraLogUtil.error(f"Failed to convert Neo4j to JSON: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to convert Neo4j to JSON: {str(e)}")
 
-    def _convert_graph_to_json(self, graph_helper: Neo4jHelper, plan_id: str, graph, edge_info: Dict) -> Dict[str, Any]:
+    def _convert_graph_to_json(self, plan_id: str, graph, edge_info: Dict) -> Dict[str, Any]:
         """
         将networkx图转换为JSON格式的结构化Plan Schema
 
@@ -1403,7 +1404,7 @@ class GraphDatabaseService:
 
         return response_data
 
-    async def save_topology_to_database(self, graph_helper: Neo4jHelper, database_name, nodes, links):
+    async def save_topology_to_database(self, session: Session, graph_helper: Neo4jHelper, database_name, nodes, links):
         try:
             # 保存节点
             for node in nodes:
@@ -1416,7 +1417,7 @@ class GraphDatabaseService:
                     "vendor": node.get("vendor", ""),
                     "series": node.get("series", "")
                 }
-                await self.create_node(name, label, properties, database=database_name)
+                await self.create_node(graph_helper, name, label, properties, database=database_name)
 
             # 保存关系
             for link in links:
@@ -1443,6 +1444,7 @@ class GraphDatabaseService:
                 to_label = "Router"
 
                 await self.create_relationship(
+                    graph_helper,
                     from_name, from_label,
                     to_name, to_label,
                     relationship_type,
@@ -1466,8 +1468,10 @@ class GraphDatabaseService:
             except Exception as cleanup_error:
                 TerraLogUtil.error(
                     f"Failed to clean up all_nodes in neo4j after topology save failure: {cleanup_error}")
+            # 注意：delete_database需要session参数，这里没有session，所以跳过PostgreSQL记录的清理
+            # 如果需要清理，需要在调用层手动删除
             try:
-                await self.delete_database(database_name)
+                await self.delete_database(session, graph_helper, database_name)
             except Exception as cleanup_error:
                 TerraLogUtil.error(
                     f"Failed to clean up database record after topology save failure: {cleanup_error}")

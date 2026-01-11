@@ -9,6 +9,7 @@ import re
 
 from apps.models.service.graph_position_model import GraphNodePosition
 from apps.models.service.topology_snapshot_model import TopologySnapshotDBModel
+from apps.utils.deps import GraphDatabaseSessionDep
 from apps.utils.logger import TerraLogUtil
 from apps.models.service.sdn_models import SDNController, SDNControllerType, SDNControllerStatus, TopologySnapshot
 from apps.models.service.api_schema import SDNControllerCreate, SDNControllerUpdate, ApiResponse
@@ -24,31 +25,31 @@ class SDNControllerService:
     async def create_controller(self, session: Session, controller_data: SDNControllerCreate) -> SDNController:
         """创建SDN控制器配置"""
         try:
-            controller = SDNController.model_dump(controller_data)
-            await self._validate_controller_data(controller_data.model_dump(), is_create=True)
-            await self._check_controller_type_exists(controller_data["type"])
+            controller_dict = controller_data.model_dump()
+            await self._validate_controller_data(controller_dict, is_create=True)
+            await self._check_controller_type_exists(session, controller_dict["type"])
             # 检查控制器名称是否已存在
-            name = controller_data.get("name")
+            name = controller_dict.get("name")
             if name:
-                await self._check_controller_name_exists(name)
+                await self._check_controller_name_exists(session, name)
             # 检查控制器主机地址和端口是否已存在
-            host = controller_data.get("host")
-            port = controller_data.get("port")
+            host = controller_dict.get("host")
+            port = controller_dict.get("port")
             if host and port:
-                await self._check_controller_host_port_exists(host, port)
+                await self._check_controller_host_port_exists(session, host, port)
             db_controller = SDNControllerDBModel()
-            db_controller.name = controller_data.get("name")
-            db_controller.type = controller_data.get("type")
-            db_controller.host = controller_data.get("host")
-            db_controller.port = controller_data.get("port")
-            db_controller.username = controller_data.get("username")
-            db_controller.password = controller_data.get("password")
-            db_controller.api_token = controller_data.get("api_token")
-            db_controller.config = controller_data.get("config")
-            db_controller.status = controller_data.get("status", SDNControllerStatus.UNKNOWN),
-            db_controller.config = controller_data.get("config", {})
+            db_controller.name = controller_dict.get("name")
+            db_controller.type = controller_dict.get("type")
+            db_controller.host = controller_dict.get("host")
+            db_controller.port = controller_dict.get("port")
+            db_controller.username = controller_dict.get("username")
+            db_controller.password = controller_dict.get("password")
+            db_controller.api_token = controller_dict.get("api_token")
+            db_controller.config = controller_dict.get("config")
+            db_controller.status = controller_dict.get("status", SDNControllerStatus.UNKNOWN)
+            db_controller.config = controller_dict.get("config", {})
             session.add(db_controller)
-            sdn_collector_manager.register_collector(controller_data["type"], controller_data)
+            sdn_collector_manager.register_collector(controller_dict["type"], controller_dict)
             session.commit()
             session.refresh(db_controller)
             return SDNController(**db_controller.to_dict(include_sensitive=True))
@@ -62,7 +63,7 @@ class SDNControllerService:
         """获取SDN控制器配置"""
         try:
             result = session.execute(
-                select(SDNController).where(SDNController.id == controller_id)
+                select(SDNControllerDBModel).where(SDNControllerDBModel.id == controller_id)
             )
             db_controller = result.scalar_one_or_none()
             if db_controller:
@@ -75,7 +76,7 @@ class SDNControllerService:
     async def get_controller_by_name(self, session: Session, name: str):
         try:
             result = session.execute(
-                select(SDNController).where(SDNController.name == name)
+                select(SDNControllerDBModel).where(SDNControllerDBModel.name == name)
             )
             db_controller = result.scalar_one_or_none()
             if db_controller:
@@ -88,9 +89,9 @@ class SDNControllerService:
     async def get_controller_by_host_port(self, session: Session, host: str, port: int):
         try:
             result = session.execute(
-                select(SDNController).where(
-                    SDNController.host == host,
-                    SDNController.port == port
+                select(SDNControllerDBModel).where(
+                    SDNControllerDBModel.host == host,
+                    SDNControllerDBModel.port == port
                 )
             )
             db_controller = result.scalar_one_or_none()
@@ -104,8 +105,8 @@ class SDNControllerService:
     async def get_controller_by_type(self, session: Session, type: str):
         try:
             result = session.execute(
-                select(SDNController).where(
-                    SDNController.type == type,
+                select(SDNControllerDBModel).where(
+                    SDNControllerDBModel.type == type,
                 )
             )
             db_controller = result.scalar_one_or_none()
@@ -119,7 +120,7 @@ class SDNControllerService:
     async def list_controllers(self, session: Session) -> List[SDNController]:
         """列出所有SDN控制器配置"""
         try:
-            result = session.execute(select(SDNController))
+            result = session.execute(select(SDNControllerDBModel))
             db_controllers = result.scalars().all()
             controllers = [
                 SDNController(**db_controller.to_dict(include_sensitive=True))
@@ -143,21 +144,29 @@ class SDNControllerService:
             await self._validate_controller_data(update_dict, is_create=False)
             # 检查名称是否冲突
             if "name" in update_dict and update_dict["name"] != existing_controller.name:
-                await self._check_controller_name_exists(update_dict["name"], exclude_id=controller_id)
+                await self._check_controller_name_exists(session, update_dict["name"], exclude_id=controller_id)
             # 检查主机地址和端口是否冲突
-            new_host = update_data.get("host", existing_controller.host)
-            new_port = update_data.get("port", existing_controller.port)
+            new_host = update_dict.get("host", existing_controller.host)
+            new_port = update_dict.get("port", existing_controller.port)
             if (new_host != existing_controller.host) or (new_port != existing_controller.port):
-                await self._check_controller_host_port_exists(new_host, new_port, exclude_id=controller_id)
+                await self._check_controller_host_port_exists(session, new_host, new_port, exclude_id=controller_id)
+
+            # 获取数据库模型进行更新
+            result = session.execute(
+                select(SDNControllerDBModel).where(SDNControllerDBModel.id == controller_id)
+            )
+            db_controller = result.scalar_one_or_none()
+            if not db_controller:
+                raise HTTPException(status_code=404, detail="Controller not found")
 
             # 执行更新
-            for key, value in update_data.items():
-                if hasattr(existing_controller, key) and value is not None:
-                    setattr(existing_controller, key, value)
+            for key, value in update_dict.items():
+                if hasattr(db_controller, key) and value is not None:
+                    setattr(db_controller, key, value)
 
             session.commit()
-            session.refresh(existing_controller)
-            return SDNController(**existing_controller.to_dict(include_sensitive=True))
+            session.refresh(db_controller)
+            return SDNController(**db_controller.to_dict(include_sensitive=True))
         except HTTPException:
             raise
         except Exception as e:
@@ -169,7 +178,7 @@ class SDNControllerService:
         try:
             existing_controller = await self.get_controller(session, controller_id)
             if existing_controller:
-                stmt = delete(SDNController).where(SDNController.id == controller_id)
+                stmt = delete(SDNControllerDBModel).where(SDNControllerDBModel.id == controller_id)
                 session.execute(stmt)
                 session.commit()
                 return True
@@ -201,6 +210,46 @@ class SDNControllerService:
             TerraLogUtil.error(f"Error testing SDN controller connection: {str(e)}")
             return {"status": "error", "message": str(e)}
 
+    async def update_controller_status(self, session: Session, controller_id: int, new_status: SDNControllerStatus) -> \
+    Optional[SDNController]:
+        """
+        更新SDN控制器状态
+        
+        Args:
+            session: 数据库会话
+            controller_id: 控制器ID
+            new_status: 新状态
+            
+        Returns:
+            更新后的控制器信息，如果控制器不存在则返回None
+        """
+        try:
+            # 获取数据库模型
+            result = session.execute(
+                select(SDNControllerDBModel).where(SDNControllerDBModel.id == controller_id)
+            )
+            db_controller = result.scalar_one_or_none()
+
+            if not db_controller:
+                TerraLogUtil.warning(f"Controller with ID {controller_id} not found")
+                return None
+
+            # 只有当状态不同时才更新
+            if db_controller.status != new_status.value:
+                old_status = db_controller.status
+                db_controller.status = new_status.value
+                session.commit()
+                session.refresh(db_controller)
+                TerraLogUtil.info(f"Controller {controller_id} status updated from {old_status} to {new_status.value}")
+            else:
+                TerraLogUtil.debug(f"Controller {controller_id} status is already {new_status.value}, no update needed")
+
+            return SDNController(**db_controller.to_dict(include_sensitive=True))
+        except Exception as e:
+            TerraLogUtil.error(f"Error updating controller status: {str(e)}")
+            session.rollback()
+            return None
+
     async def get_topology(self, session: Session, controller_id: int) -> Dict[str, Any]:
         """获取SDN控制器网络拓扑"""
         try:
@@ -218,7 +267,7 @@ class SDNControllerService:
             TerraLogUtil.error(f"Error retrieving SDN controller topology: {str(e)}")
             return {"status": "error", "message": str(e)}
 
-    async def sync_topology(self, session: Session, controller_id: int) -> Dict[str, Any]:
+    async def sync_topology(self, session: Session, graph_session: GraphDatabaseSessionDep, controller_id: int) -> Dict[str, Any]:
         """同步网络拓扑"""
         try:
             controller = await self.get_controller(session, controller_id)
@@ -233,6 +282,9 @@ class SDNControllerService:
             nodes = topology.get("nodes", [])
             links = topology.get("links", [])
             timestamp = topology.get("timestamp", datetime.now().isoformat())
+            TerraLogUtil.info(f"Syncing topology from controller {controller.name}:  {len(nodes)} nodes, {len(links)} links at {timestamp}")
+            TerraLogUtil.info(f"nodes: {nodes}")
+            TerraLogUtil.info(f"links: {links}")
 
             # 生成数据库名称，使用时间戳替换特殊字符
             snapshot_time_str = timestamp.replace(':', '').replace('-', '').replace('.', '').replace('T', '_')
@@ -241,7 +293,8 @@ class SDNControllerService:
             # 创建 Neo4j 数据库并保存拓扑
             await self.graph_database_service.create_database(session, name=database_name)
             await self.graph_database_service.save_topology_to_database(
-                session,
+                session=session,
+                graph_helper=graph_session,
                 database_name=database_name,
                 nodes=nodes,
                 links=links
@@ -343,7 +396,7 @@ class SDNControllerService:
     async def delete_snapshots_by_controller(self, session: Session, controller_id: int) -> Dict[str, Any]:
         """删除指定控制器的所有拓扑快照"""
         try:
-            snapshots = await self.list_snapshots(session,controller_id=controller_id)
+            snapshots = await self.list_snapshots(session, controller_id=controller_id)
             deleted_count = 0
             errors = []
             for snapshot in snapshots:
@@ -544,20 +597,23 @@ class SDNControllerService:
         )
         return bool(domain_pattern.match(domain))
 
-    async def _check_controller_name_exists(self, name: str, exclude_id: Optional[int] = None) -> None:
+    async def _check_controller_name_exists(self, session: Session, name: str,
+                                            exclude_id: Optional[int] = None) -> None:
         """检查控制器名称是否已存在"""
-        existing = await self.get_controller_by_name(name)
+        existing = await self.get_controller_by_name(session, name)
         if existing and (exclude_id is None or existing.id != exclude_id):
             raise HTTPException(status_code=409, detail=f"Controller with name '{name}' already exists")
 
-    async def _check_controller_host_port_exists(self, host: str, port: int, exclude_id: Optional[int] = None) -> None:
+    async def _check_controller_host_port_exists(self, session: Session, host: str, port: int,
+                                                 exclude_id: Optional[int] = None) -> None:
         """检查控制器主机地址和端口是否已存在"""
-        existing = await self.get_controller_by_host_port(host, port)
+        existing = await self.get_controller_by_host_port(session, host, port)
         if existing and (exclude_id is None or existing.id != exclude_id):
             raise HTTPException(status_code=409, detail=f"Controller with host '{host}:{port}' already exists")
 
-    async def _check_controller_type_exists(self, type: str, exclude_id: Optional[int] = None) -> None:
-        """检查控制器主机地址和端口是否已存在"""
-        existing = await self.get_controller_by_type(type)
+    async def _check_controller_type_exists(self, session: Session, type: str,
+                                            exclude_id: Optional[int] = None) -> None:
+        """检查控制器类型是否已存在"""
+        existing = await self.get_controller_by_type(session, type)
         if existing and (exclude_id is None or existing.id != exclude_id):
             raise HTTPException(status_code=409, detail=f"Controller with type '{type}' already exists")

@@ -6,11 +6,11 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException, Depends, APIRouter, Query
 from pydantic import BaseModel
 
-from apps.utils.deps import SessionDep
+from apps.utils.deps import SessionDep, GraphDatabaseSessionDep
 from apps.utils.logger import TerraLogUtil
 
 from apps.service.sdn_controller_service import SDNControllerService
-from apps.models.service.sdn_models import SDNController
+from apps.models.service.sdn_models import SDNController, SDNControllerStatus
 from apps.models.service.api_schema import SDNControllerCreate, SDNControllerUpdate, ApiResponse, \
     TopologySnapshotsResponse, TopologySnapshotResponse
 
@@ -116,9 +116,19 @@ async def test_controller_connection(
         session: SessionDep,
         service: SDNControllerService = Depends(get_sdn_service)
 ):
-    """测试与指定SDN控制器的连接"""
+    """测试与指定SDN控制器的连接，并根据结果自动更新状态"""
     try:
+        # 测试连接
         result = await service.test_controller_connection(session, controller_id)
+        
+        # 根据测试结果更新状态
+        if result.get("status") == "success":
+            # 测试成功，更新为ACTIVE
+            await service.update_controller_status(session, controller_id, SDNControllerStatus.ACTIVE)
+        else:
+            # 测试失败，更新为ERROR
+            await service.update_controller_status(session, controller_id, SDNControllerStatus.ERROR)
+        
         return result
     except HTTPException:
         raise
@@ -148,11 +158,12 @@ async def get_topology(
 async def sync_topology(
         controller_id: int,
         session: SessionDep,
+        graph_session: GraphDatabaseSessionDep,
         service: SDNControllerService = Depends(get_sdn_service)
 ):
     """同步指定SDN控制器的网络拓扑"""
     try:
-        topology = await service.sync_topology(session, controller_id)
+        topology = await service.sync_topology(session, graph_session, controller_id)
         return topology
     except HTTPException:
         raise

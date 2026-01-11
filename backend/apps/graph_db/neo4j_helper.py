@@ -153,7 +153,7 @@ class Neo4jHelper:
         
         try:
             with self.driver.session() as session:
-                return session.write_transaction(_execute_tx)
+                return session.execute_write(_execute_tx)
         except Neo4jError as e:
             TerraLogUtil.error(f"Write query execution failed: {e}")
             raise
@@ -279,7 +279,7 @@ class Neo4jHelper:
             return summary.counters.nodes_deleted
 
         with self.driver.session() as session:
-            return session.write_transaction(_delete_tx)
+            return session.execute_write(_delete_tx)
     
     def delete_node(self, label: str, properties: Dict[str, Any], database: str = None) -> int:
         """
@@ -310,7 +310,7 @@ class Neo4jHelper:
             return summary.counters.nodes_deleted
         
         with self.driver.session() as session:
-            return session.write_transaction(_delete_tx)
+            return session.execute_write(_delete_tx)
     
     # 关系操作方法
     
@@ -363,7 +363,9 @@ class Neo4jHelper:
         params.update({f"to_{k}": v for k, v in to_properties.items()})
         params.update({f"rel_{k}": v for k, v in relationship_properties.items()})
         
+        TerraLogUtil.debug(f"Creating relationship with query: {query}, params: {params}")
         result = self.execute_write_query(query, params)
+        TerraLogUtil.debug(f"Create relationship result: {result}")
         return result[0] if result else {}
 
     def merge_relationship(self, from_label: str, from_properties: Dict[str, Any],
@@ -448,7 +450,7 @@ class Neo4jHelper:
             return summary.counters.relationships_deleted
 
         with self.driver.session() as session:
-            return session.write_transaction(_delete_tx)
+            return session.execute_write(_delete_tx)
     
     def delete_relationship(self, from_label: str, from_properties: Dict[str, Any],
                           to_label: str, to_properties: Dict[str, Any],
@@ -499,7 +501,7 @@ class Neo4jHelper:
             return summary.counters.relationships_deleted
         
         with self.driver.session() as session:
-            return session.write_transaction(_delete_tx)
+            return session.execute_write(_delete_tx)
     
     def delete_relationship_by_id(self, relationship_id: str) -> int:
         """
@@ -534,7 +536,7 @@ class Neo4jHelper:
             return summary.counters.relationships_deleted
         
         with self.driver.session() as session:
-            return session.write_transaction(_delete_tx)
+            return session.execute_write(_delete_tx)
     
     def update_relationship_properties(self, from_label: str, from_properties: Dict[str, Any],
                                      to_label: str, to_properties: Dict[str, Any],

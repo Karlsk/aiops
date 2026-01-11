@@ -18,17 +18,14 @@ class GraphPositionService:
             节点位置字典，格式: {"node_id": {"x": 100, "y": 200}}
         """
         try:
-            stmt = select(GraphNodePosition).where(GraphNodePosition.database == database)
+            stmt = select(GraphNodePosition).where(GraphNodePosition.database_name == database)
             result = session.exec(stmt)
-            db_positions = result.scalars().all()
+            db_positions = result.all()
             positions = {
                 db_position.node_id: {"x": db_position.x, "y": db_position.y}
                 for db_position in db_positions
             }
-            return {
-                pos.node_id: {"x": pos.x, "y": pos.y}
-                for pos in positions
-            }
+            return positions
         except Exception as e:
             TerraLogUtil.error(f"获取节点位置失败: {e}")
             return {}
