@@ -1,0 +1,52 @@
+# Terra AIOps Platform Configuration File
+# This configuration file defines all application settings.
+# Environment variables can override these values.
+
+# Basic Settings
+project_name: "Terra AIOps Platform"
+api_v1_str: "/api/v1"
+http_host: "0.0.0.0"
+http_port: 7082
+
+# CORS Configuration
+backend_cors_origins: []  # Example: ["http://localhost:3000", "http://localhost:5173"]
+
+# PostgreSQL Database Configuration
+postgres:
+  server: "172.17.1.227"
+  port: 5432
+  user: "root"
+  password: "Dms123@pg"
+  db: "terra-aiops"
+  pool_size: 20
+  max_overflow: 30
+  pool_recycle: 3600
+  pool_pre_ping: true
+  # Optional: override with custom URL
+  # url: "postgresql+psycopg://user:password@host:port/database"
+
+# Neo4j Configuration
+neo4j:
+  url: "bolt://172.17.1.227:7687"
+  user: "neo4j"
+  password: "dms123!!"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  dir: "logs"
+  format: "%(asctime)s - %(name)s - %(levelname)s:%(lineno)d - %(message)s"
+  sql_debug: false
+
+# Cache Configuration
+cache:
+  type: "memory"  # memory or redis
+  max_size: 1000  # For memory cache
+  # Redis configuration (if type is redis)
+  # host: "localhost"
+  # port: 6379
+  # db: 0
+  # password: null
+  # socket_timeout: 5
+  # socket_connect_timeout: 5
+  # serializer: "json"  # json or pickle

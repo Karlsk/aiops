@@ -1,0 +1,22 @@
+[project]
+name = "terra-aiops"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.128.0",
+    "langchain-core>=1.2.6",
+    "langchain-openai>=1.1.7",
+    "langgraph>=1.0.5",
+    "pydantic>=2.12.5",
+    "pydantic-core>=2.41.5",
+    "pydantic-settings>=2.12.0",
+    "pyyaml>=6.0",
+    "sqlmodel>=0.0.31",
+    "alembic>=1.13.0",
+    "psycopg>=3.1.0",
+    "langchain-mcp-adapters>=0.2.1",
+    "neo4j>=6.0.3",
+    "networkx>=3.6.1",
+]
