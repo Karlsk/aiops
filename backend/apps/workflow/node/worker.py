@@ -20,6 +20,8 @@ from apps.workflow.agent.game_react.llm import generate_response
 from apps.workflow.agent.game_react.memory import Memory
 from ..client.mcp_client import MCPClientManager
 
+from apps.utils.logger import TerraLogUtil
+
 
 class WorkerNode(BaseNode):
     """
@@ -59,7 +61,7 @@ class WorkerNode(BaseNode):
                     self.goals.append(Goal(**goal_dict))
                 elif isinstance(goal_dict, Goal):
                     self.goals.append(goal_dict)
-        
+
         # 从 config 中提取和初始化 memory
         self.memory = Memory()
         if self.worker_config.memory:
@@ -109,7 +111,7 @@ class WorkerNode(BaseNode):
 
                 # 验证工具的必需字段
                 if not tool_name or not tool_name.strip():
-                    print(f"⚠️ 警告: 工具缺少有效的 name 字段，跳过该工具。工具信息: {tool}")
+                    TerraLogUtil.error(f"⚠️ 警告: 工具缺少有效的 name 字段，跳过该工具。工具信息: {tool}")
                     continue
 
                 # 清理 name（移除多余空白）
@@ -223,49 +225,73 @@ class WorkerNode(BaseNode):
         def worker_func(state: Dict[str, Any]) -> Dict[str, Any]:
             """执行 Worker 节点逻辑"""
             state_dict = convert_state_to_dict(state)
-            # short_memory = state_dict.get("history", [])
-            # if short_memory:
-            #     self.memory.items.extend(short_memory)
+            
+            # 从状态中提取新的 goals（避免累积）
+            goals_from_state = state_dict.get("goals", [])
+            current_goals = list(self.goals)  # 从配置中初始化的 goals
+            cur_steps = []
+            
+            # 处理从状态传入的动态 goals
+            if goals_from_state and isinstance(goals_from_state, list):
+                for goal_dict in goals_from_state:
+                    if isinstance(goal_dict, dict):
+                        goal_dict['priority'] = goal_dict.get('priority', 1)
+                        current_goals.append(Goal(**goal_dict))
+                        cur_steps.append(goal_dict.get('name', ''))
+                    elif isinstance(goal_dict, Goal):
+                        current_goals.append(goal_dict)
+                        cur_steps.append(goal_dict.name)
+                    elif isinstance(goal_dict, str):
+                        current_goals.append(Goal(
+                            priority=1,
+                            name=goal_dict,
+                            description=f"调用 MCP 工具获取: {goal_dict}"
+                        ))
+                        cur_steps.append(goal_dict)
+
+
 
             start_time = time.time()
             try:
                 # 异步初始化 MCP 工具和 Agent
                 if self.worker_config.sub_type.value == "mcp":
-                    # 使用 try-except 来处理已存在的事件循环
-                    try:
-                        loop = asyncio.get_running_loop()
-                    except RuntimeError:
-                        # 没有运行中的事件循环，创建新的
-                        loop = None
-                    
-                    if loop is None:
-                        # 没有运行中的循环，安全地创建新循环
+                    # 只在首次调用时初始化 action_registry，避免重复初始化
+                    if self.action_registry is None:
+                        # 使用 try-except 来处理已存在的事件循环
                         try:
-                            self.action_registry = asyncio.run(self._init_mcp_actions())
-                        except RuntimeError as e:
-                            # 如果仍然失败，尝试使用 nest_asyncio
-                            if "asyncio.run() cannot be called from a running event loop" in str(e):
-                                import nest_asyncio
-                                nest_asyncio.apply()
+                            loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            # 没有运行中的事件循环，创建新的
+                            loop = None
+                        
+                        if loop is None:
+                            # 没有运行中的循环，安全地创建新循环
+                            try:
                                 self.action_registry = asyncio.run(self._init_mcp_actions())
-                            else:
-                                raise
-                    else:
-                        # 已有运行中的事件循环，使用 ensure_future
-                        import concurrent.futures
-                        try:
-                            # 在线程中运行异步操作
-                            with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(asyncio.run, self._init_mcp_actions())
-                                self.action_registry = future.result()
-                        except Exception as e:
-                            print(f"⚠️ 线程执行失败，尝试直接使用已有循环: {e}")
-                            # 回退到同步方式
-                            self.action_registry = self._sync_init_mcp_actions()
+                            except RuntimeError as e:
+                                # 如果仍然失败，尝试使用 nest_asyncio
+                                if "asyncio.run() cannot be called from a running event loop" in str(e):
+                                    import nest_asyncio
+                                    nest_asyncio.apply()
+                                    self.action_registry = asyncio.run(self._init_mcp_actions())
+                                else:
+                                    raise
+                        else:
+                            # 已有运行中的事件循环，使用 ensure_future
+                            import concurrent.futures
+                            try:
+                                # 在线程中运行异步操作
+                                with concurrent.futures.ThreadPoolExecutor() as executor:
+                                    future = executor.submit(asyncio.run, self._init_mcp_actions())
+                                    self.action_registry = future.result()
+                            except Exception as e:
+                                print(f"⚠️ 线程执行失败，尝试直接使用已有循环: {e}")
+                                # 回退到同步方式
+                                self.action_registry = self._sync_init_mcp_actions()
 
-                    # 创建 Agent 实例
-                    self.agent = Agent(
-                        goals=self.goals,
+                    # 创建 Agent 实例（每次调用都创建新实例，使用当前的 goals）
+                    agent = Agent(
+                        goals=current_goals,
                         agent_language=self.agent_language,
                         action_registry=self.action_registry,
                         generate_response=generate_response,
@@ -276,14 +302,21 @@ class WorkerNode(BaseNode):
                     user_input = state_dict.get('input') or state_dict.get('user_input') or ''
 
                     # 从状态中获取或使用初始化时的 memory
-                    current_memory = state_dict.get('memory', self.memory)
-                    if not isinstance(current_memory, Memory):
-                        # 如果不是 Memory 对象，创建新的 Memory
-                        current_memory = self.memory
+                    short_memory = state_dict.get("history", [])
+                    current_memory = self.memory
+                    if short_memory and isinstance(short_memory, list):
+                        for item in short_memory:
+                            if isinstance(item, dict):
+                                current_memory.add_memory(item)
+                            elif isinstance(item, str):
+                                current_memory.add_memory({
+                                    "type": "user",
+                                    "content": item
+                                })
 
                     # 运行 Agent
                     print(f"🤖 Worker '{self.name}' 开始执行，输入: {user_input}")
-                    final_memory = self.agent.run(user_input, memory=current_memory)
+                    final_memory = agent.run(user_input, memory=current_memory)
 
                     # 获取最终的记忆信息
                     memories = final_memory.get_memories()
@@ -324,6 +357,7 @@ class WorkerNode(BaseNode):
 
                     # 构造输出
                     output = {
+                        "steps": cur_steps,
                         "status": "completed",
                         "results": results,
                         "memories": memories,
@@ -345,10 +379,27 @@ class WorkerNode(BaseNode):
                     output_data=output,
                     execution_time_ms=execution_time
                 ))
-
+                state_dict["worker_status"] = output.get("status", "error")
+                if output.get("status") == "completed":
+                    state_dict["worker_result"] = {
+                        "steps": output.get("steps", []),
+                        "results": output.get("results", [])
+                    }
+                    cur_history = [
+                        {
+                            "type": "user",
+                            "content": output.get("steps", [])
+                        },
+                        {
+                            "type": "assistant",
+                            "content": output.get("results", [])
+                        }
+                    ]
+                else:
+                    cur_history = []
                 # 使用 map_output_to_state 将输出映射到状态更新
                 # 采用 Dify 风格，为输出添加 {node_name}_result 字段
-                return map_output_to_state(self.name, output, state_dict)
+                return map_output_to_state(self.name, output, state_dict, cur_history)
 
             except Exception as e:
                 execution_time = (time.time() - start_time) * 1000

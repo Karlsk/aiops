@@ -1,7 +1,7 @@
 import time
 from functools import wraps
 from .logger import TerraLogUtil
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
 import requests
 from apps.models.workflow.models import PlanSubType
@@ -100,7 +100,7 @@ def convert_state_to_dict(state: Any) -> Dict[str, Any]:
         return {}
 
 
-def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Optional[Dict[str, Any]] = None) -> Dict[
+def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Optional[Dict[str, Any]] = None, cur_history: Optional[List[Dict[str, Any]]] = None, history_override: Optional[bool] = False) -> Dict[
     str, Any]:
     """
     将节点输出映射到状态更新
@@ -115,9 +115,8 @@ def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Opti
     Returns:
         Dict: 返回给 LangGraph 的状态更新
     """
-    # 使用通用的模式：{node_name}_result
-    # 这样后续节点可以灵活访问任何前面节点的输出
-    state_update = {}
+    # 首先保留 state 中的所有原始内容，避免信息丢失
+    state_update = dict(state) if state else {}
 
     # 主要输出存储为 {node_name}_result
     state_update[f"{node_name}_result"] = node_output
@@ -132,10 +131,14 @@ def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Opti
         if not isinstance(history, list):
             history = []
 
-        # 添加当前节点的执行记录
-        entry = f"{node_name}: {str(node_output)[:100]}..."
-        history_update = history + [entry]
-        state_update["history"] = history_update
+        if cur_history:
+            if history_override:
+                # 覆盖历史记录
+                history_update = cur_history
+            else:
+                # 扩展历史记录（list.extend返回None，需要手动构建新列表）
+                history_update = history + cur_history
+            state_update["history"] = history_update
 
     return state_update
 
