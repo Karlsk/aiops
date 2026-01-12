@@ -946,18 +946,18 @@ class GraphDatabaseService:
             if "Action" in data:
                 node_type = "function_call"
                 action = data.get('Action', '')
-                description = data.get('name', '')
-                outputs = data.get('Observation', '')
-                if outputs:
-                    outputs = [outputs] if isinstance(outputs, str) else [outputs]
-                else:
-                    outputs = []
+                name = data.get('name', '')
+                observation = data.get('Observation', '')
+                # if observation:
+                #     observation = [observation] if isinstance(observation, str) else [observation]
+                # else:
+                #     outputs = []
 
                 nodes[node_id] = {
                     "type": node_type,
                     "action": action,
-                    "description": description,
-                    "outputs": outputs
+                    "name": name if name else node_id,
+                    "observation": observation
                 }
 
                 # 第一个节点作为start节点
@@ -1008,9 +1008,9 @@ class GraphDatabaseService:
 
         return {
             "id": f"plan_{plan_id}",
+            "start": start_node,
             "nodes": nodes,
             "edges": edges,
-            "start": start_node,
             "stats": {
                 "nodes_count": len(nodes),
                 "edges_count": len(edges)

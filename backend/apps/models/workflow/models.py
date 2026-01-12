@@ -49,7 +49,7 @@ class PlannerConfig(BaseModel):
     """Planner 节点配置"""
     sub_type: PlanSubType = Field(..., description="Planner 子类型：simple(一次性获取plan) 或 supervision（按步骤获取邻居节点）")
     graph_db_name: str = Field(..., description="图数据库database名称")
-    event_name: str = Field(..., description="事件名称")
+    event_name: Optional[str] = Field(default=None, description="事件名称")
     api_url: str = Field(default="http://localhost:8000",
                          description="FastAPI 服务器地址，用于调用 /api/v1/neo4j/json 接口")
 

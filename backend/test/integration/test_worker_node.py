@@ -292,8 +292,9 @@ async def test_worker_node_end_to_end():
     state = {
         "input": user_input,
         "context": "故障诊断工作流",
-        "history": [ {"type": "user", "content": "联通子段 CSCN-A0007-CSCN-A0026"}],  # 初始空历史
-        "goals": [{"name": "获取落地星信息", "description": "Action	获取落地卫星(fetch_landing_satellite),Observation	观察satellite_name获取落地星名称"}]
+        "history": [{"type": "user", "content": "联通子段 CSCN-A0007-CSCN-A0026"}],  # 初始空历史
+        "goals": [{"name": "获取落地星信息",
+                   "description": "Action	获取落地卫星(fetch_landing_satellite),Observation	观察satellite_name获取落地星名称"}]
     }
 
     print(f"  - 输入: {user_input}")
@@ -304,7 +305,7 @@ async def test_worker_node_end_to_end():
         result1 = runnable.invoke(state)
         print(f"\n✓ 第一次执行完成")
         print(f"  - 输出类型: {type(result1)}")
-        
+
         # 验证输出格式
         assert isinstance(result1, dict), "输出应该是字典"
         print(f"  ✓ 输出格式验证通过")
@@ -347,33 +348,33 @@ async def test_worker_node_end_to_end():
 
     # # 7. 测试场景 2：多次调用不累积 goals
     # print("\n📋 测试场景 2: 多次调用验证（测试 goals 不累积）")
-    
+
     # # 记录初始 goals 数量
     # initial_goals_count = len(worker_node.goals)
     # print(f"  - 初始配置的 goals 数: {initial_goals_count}")
-    
+
     # # 模拟第二次调用，状态中包含额外的 goals
     # state2 = {
     #     "input": "第二次查询",
     #     "goals": ["动态添加的目标"],  # 从状态传入的动态 goal
     #     "history": result1.get('history', []) if result1 else []
     # }
-    
+
     # try:
     #     result2 = runnable.invoke(state2)
     #     print(f"  ✓ 第二次执行完成")
-        
+
     #     # 验证 worker_node.goals 没有被污染（应该保持初始值）
     #     assert len(worker_node.goals) == initial_goals_count, \
     #         f"goals 不应累积！初始: {initial_goals_count}, 当前: {len(worker_node.goals)}"
     #     print(f"  ✓ Goals 不累积验证通过（保持 {initial_goals_count} 个）")
-        
+
     #     # 验证 history 正确累积
     #     if 'history' in result2:
     #         history_len = len(result2['history'])
     #         print(f"  - History 正确累积，长度: {history_len}")
     #         print(f"  ✓ History 累积验证通过")
-            
+
     # except Exception as e:
     #     print(f"  ⚠️ 第二次执行出错: {str(e)[:200]}")
     #     print(f"  - 但 goals 不累积验证: {len(worker_node.goals) == initial_goals_count}")
@@ -382,14 +383,14 @@ async def test_worker_node_end_to_end():
     # print("\n📋 测试场景 3: MCP 初始化验证")
     # action_registry_id_before = id(worker_node.action_registry) if worker_node.action_registry else None
     # print(f"  - 第一次调用后 action_registry ID: {action_registry_id_before}")
-    
+
     # # 再次调
     # state3 = {"input": "第三次查询", "history": []}
     # try:
     #     result3 = runnable.invoke(state3)
     #     action_registry_id_after = id(worker_node.action_registry)
     #     print(f"  - 第三次调用后 action_registry ID: {action_registry_id_after}")
-        
+
     #     if action_registry_id_before:
     #         assert action_registry_id_before == action_registry_id_after, \
     #             "action_registry 不应该重新初始化！"
@@ -453,13 +454,14 @@ def test_worker_node_with_runnable():
     # 验证执行日志
     assert hasattr(worker_node, 'get_execution_history'), "WorkerNode 应该能记录执行历史"
     print(f"✓ 执行日志记录功能验证通过")
-    
+
+
 async def test_worker_node_end_to_end_langgraph():
     """
     端到端集成测试：验证 WorkerNode 作为 LangGraph 节点的兼容性
     """
     print("\n📋 端到端集成测试: 验证 WorkerNode 作为 LangGraph节点的兼容性")
-    from typing_extensions import TypedDict 
+    from typing_extensions import TypedDict
 
     from langgraph.graph import StateGraph, START, END  # LangGraph的核心类
     class MyState(TypedDict):
@@ -470,13 +472,13 @@ async def test_worker_node_end_to_end_langgraph():
         worker_status: dict
         worker_result: dict
 
-    
     def planner_node(state: MyState) -> MyState:
         print(f"Planning Node: {state['input']}")
-        state['goals'] = [{"name": "获取落地星信息", "description": "Action	获取落地卫星(fetch_landing_satellite),Observation	观察satellite_name获取落地星名称"}]
+        state['goals'] = [{"name": "获取落地星信息",
+                           "description": "Action	获取落地卫星(fetch_landing_satellite),Observation	观察satellite_name获取落地星名称"}]
         print(f"Planning Node: {state['goals']}")
         return state
-    
+
     def print_node(state: MyState) -> MyState:
         print("=" * 60)
         print("Print Node:")
@@ -484,53 +486,50 @@ async def test_worker_node_end_to_end_langgraph():
             print(f"Print Node: {key}: {value}")
         print("=" * 60)
         return state
-    
+
     def init_history_node(state: MyState) -> MyState:
         state['history'] = [{"type": "user", "content": "联通子段 CSCN-A0007-CSCN-A0026"}]
         return state
-    
-    def create_worker_node(name: str):
-        
 
+    def create_worker_node(name: str):
         # 2. 创建 WorkerNode 配置
         server_configs = {
-                "cscn_tool_mcp": {
-                    "url": "http://172.17.1.143:18000/sse",
-                    "transport": "sse"
-                }
+            "cscn_tool_mcp": {
+                "url": "http://172.17.1.143:18000/sse",
+                "transport": "sse"
             }
+        }
 
         config = {
-                "sub_type": "mcp",
-                "mcp_configs": server_configs,
-                "goals": [
-                    # {
-                    #     "priority": 1,
-                    #     "name": "获取落地星信息",
-                    #     "description": "调用 MCP 工具获取落地星的名称。",
-                    # },
-                    {
-                        "priority": 99,
-                        "name": "终止任务",
-                        "description": "当完成其他goals时，调用 terminate。",
-                    },
-                ],
-                # "memory": {
-                #     "items": [
-                #         {"type": "user", "content": "联通子段 CSCN-A0007-CSCN-A0026"}
-                #     ]
-                # }
-            }
+            "sub_type": "mcp",
+            "mcp_configs": server_configs,
+            "goals": [
+                # {
+                #     "priority": 1,
+                #     "name": "获取落地星信息",
+                #     "description": "调用 MCP 工具获取落地星的名称。",
+                # },
+                {
+                    "priority": 99,
+                    "name": "终止任务",
+                    "description": "当完成其他goals时，调用 terminate。",
+                },
+            ],
+            # "memory": {
+            #     "items": [
+            #         {"type": "user", "content": "联通子段 CSCN-A0007-CSCN-A0026"}
+            #     ]
+            # }
+        }
         worker_node = WorkerNode(
             name=name,
             config=config
         )
         worker_runnable = worker_node.build_runnable()
         return worker_runnable
-        
-    
+
     worker_node = create_worker_node("e2e_worker")
-    
+
     builder = StateGraph(MyState)
     builder.add_node("init_history", init_history_node)
 
@@ -542,7 +541,7 @@ async def test_worker_node_end_to_end_langgraph():
     builder.add_edge("planner", "worker")
     builder.add_edge("worker", "print")
     builder.add_edge("print", END)
-    
+
     graph = builder.compile()
     print(f"Graph compiled successfully")
     user_input = "故障卫星：A0015， start_time: 2025-11-25T01:04:49 ，end_time: 2025-11-25T01:05:00"
@@ -554,7 +553,7 @@ async def test_worker_node_end_to_end_langgraph():
     print("=" * 60)
     print("执行结果:", result)
     print("测试完成")
-    
+
 
 def run_all_tests():
     """运行所有测试"""

@@ -53,7 +53,7 @@ async def startup():
     """应用启动时的初始化逻辑"""
     TerraLogUtil.info("Terra AiOps Platform应用启动中...")
     TerraLogUtil.info("Neo4j 全局连接已初始化")
-    
+
     # 重新注册所有已存在的 SDN 控制器
     await register_sdn_collectors()
 
@@ -61,10 +61,10 @@ async def startup():
 async def shutdown():
     """应用关闭时的清理逻辑"""
     TerraLogUtil.info("Terra AiOps Platform应用关闭中...")
-    
+
     # 清理所有注册的收集器
     await cleanup_sdn_collectors()
-    
+
     TerraLogUtil.info("正在关闭 Neo4j 连接...")
     close_graph_db()
     TerraLogUtil.info("Neo4j 连接已关闭")
@@ -75,17 +75,18 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
     await startup()
-    
+
     yield
-    
+
     # 关闭时清理资源
     await shutdown()
-    
+
 
 def custom_generate_unique_id(route: APIRoute) -> str:
     tag = route.tags[0] if route.tags and len(route.tags) > 0 else ""
     return f"{tag}-{route.name}"
-    
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
@@ -102,10 +103,8 @@ if settings.all_cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
-
 
 if __name__ == "__main__":
     import uvicorn

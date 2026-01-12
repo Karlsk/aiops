@@ -5,6 +5,8 @@ from typing import Any, Dict, Optional, List
 import json
 import requests
 from apps.models.workflow.models import PlanSubType
+
+
 # from apps.llm.llm_helper import LLMHelper
 
 
@@ -62,25 +64,6 @@ def timeout_handler(timeout_seconds=30.0):
     return decorator
 
 
-# _llm_helper: Optional[LLMHelper] = None
-
-
-# def _get_llm_helper() -> LLMHelper:
-#     """获取 LLMHelper 实例，首次调用时初始化（延迟初始化模式）
-
-#     这种设计避免了模块导入时的初始化，只在实际需要时创建实例。
-#     这对于测试环境特别重要，可以避免导入错误。
-#     """
-#     global _llm_helper
-#     if _llm_helper is None:
-#         _llm_helper = LLMHelper(
-#             temperature=0.1,
-#             max_tokens=1024,
-#             enable_timeout=False
-#         )
-#     return _llm_helper
-
-
 def convert_state_to_dict(state: Any) -> Dict[str, Any]:
     """
     将状态转换为字典
@@ -100,7 +83,9 @@ def convert_state_to_dict(state: Any) -> Dict[str, Any]:
         return {}
 
 
-def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Optional[Dict[str, Any]] = None, cur_history: Optional[List[Dict[str, Any]]] = None, history_override: Optional[bool] = False) -> Dict[
+def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Optional[Dict[str, Any]] = None,
+                        cur_history: Optional[List[Dict[str, Any]]] = None, history_override: Optional[bool] = False) -> \
+Dict[
     str, Any]:
     """
     将节点输出映射到状态更新
@@ -125,7 +110,7 @@ def map_output_to_state(node_name: str, node_output: Dict[str, Any], state: Opti
     state_update.update(node_output)
 
     # 更新 history（如果存在）
-    if state and "history" in state:
+    if state and "history" in state and cur_history is not None:
         # 获取当前 history
         history = state.get("history", [])
         if not isinstance(history, list):
@@ -187,10 +172,10 @@ def generate_plan_json(event_name: str, database: str, sub_type: str = "simple",
 
         # 构建 API URL
         if sub_type == PlanSubType.SUPERVISION:
-            url = f"{api_base_url}/api/v1/neo4j/workflow/next-node"
+            url = f"{api_base_url}/api/v1/graph/database/workflow/next-node"
         else:
             # 默认为 simple 类型
-            url = f"{api_base_url}/api/v1/neo4j/json"
+            url = f"{api_base_url}/api/v1/graph/database/json"
 
         params = {"name": event_name, "database": database}
 

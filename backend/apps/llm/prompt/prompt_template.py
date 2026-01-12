@@ -39,6 +39,9 @@ def get_reflection_input_prompt(plan: str, worker_result: str, sub_type: PlanSub
   - 定义节点间的依赖与可达条件
 - `start`
   - DAG 的显式起始节点
+  
+  
+- plan:
 ```text
 {plan}
 ```
@@ -48,6 +51,8 @@ def get_reflection_input_prompt(plan: str, worker_result: str, sub_type: PlanSub
 - 若非空：
     - 只能从该 step 的 直接下游节点 中选择
     - 条件判断 只能基于 latest_result 中已存在的字段
+
+- latest_result:
 ```text
 {worker_result}
 ```
@@ -62,12 +67,16 @@ def get_reflection_input_prompt(plan: str, worker_result: str, sub_type: PlanSub
     - type = final_answer：表示【流程终止节点，不可继续调度】
 - edges：定义节点间的依赖与条件
 - is_first_node：是否存在显式起始节点
+
+- plan:
 ```text
 {plan}
 ```
 ## 最新步骤执行结果（latest_result）
 - 若为空：表示第一次调度
 - 若非空：只能从该 step 的【直接下游节点】中选择
+
+- latest_result:
 ```text
 {worker_result}
 ```
@@ -101,7 +110,10 @@ def get_reflection_rules_prompt(sub_type: PlanSubType) -> str:
 
 ```json
 {
-    "next_step": "Action: xxx；Observation: xxx"
+    "next_step": {
+        "name": "name_of_the_node",
+        "description": "Action: xxx；Observation: xxx"
+    }
 }
 ```
 ### 严格要求：
@@ -171,7 +183,12 @@ def get_reflection_rules_prompt(sub_type: PlanSubType) -> str:
 ---
 # Output Format（只能二选一）
 ## 非终止情况
-{ "next_step": "Action: xxx；Observation: xxx" }
+{
+    "next_step": {
+        "name": "name_of_the_node",
+        "description": "Action: xxx；Observation: xxx"
+    }
+}
 
 ## 终止情况（命中 final_answer）
 { "final_answer": "xxx" }
@@ -204,7 +221,10 @@ def get_reflection_rules_prompt(sub_type: PlanSubType) -> str:
 
 ```json
 {
-    "next_step": "Action: xxx；Observation: xxx"
+    "next_step": {
+        "name": "name_of_the_node",
+        "description": "Action: xxx；Observation: xxx"
+    }
 }
 ```
 ---
@@ -249,7 +269,12 @@ def get_reflection_rules_prompt(sub_type: PlanSubType) -> str:
 ---
 # Output Format（只能二选一）
 ## 非终止情况
-{ "next_step": "Action: xxx；Observation: xxx" }
+{
+    "next_step": {
+        "name": "name_of_the_node",
+        "description": "Action: xxx；Observation: xxx"
+    }
+}
 
 ## 终止情况（命中 final_answer）
 { "final_answer": "xxx" }

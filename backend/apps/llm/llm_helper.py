@@ -722,3 +722,22 @@ class LLMHelper:
             text_response = response.content if hasattr(response, 'content') else str(response)
             TerraLogUtil.info("无工具调用，返回普通文本")
             return text_response
+
+
+_llm_helper: Optional[LLMHelper] = None
+
+
+def _get_llm_helper() -> LLMHelper:
+    """获取 LLMHelper 实例，首次调用时初始化（延迟初始化模式）
+
+    这种设计避免了模块导入时的初始化，只在实际需要时创建实例。
+    这对于测试环境特别重要，可以避免导入错误。
+    """
+    global _llm_helper
+    if _llm_helper is None:
+        _llm_helper = LLMHelper(
+            temperature=0.1,
+            max_tokens=1024,
+            enable_timeout=False
+        )
+    return _llm_helper
