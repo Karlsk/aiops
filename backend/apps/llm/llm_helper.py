@@ -727,7 +727,7 @@ class LLMHelper:
 _llm_helper: Optional[LLMHelper] = None
 
 
-def _get_llm_helper() -> LLMHelper:
+def get_llm_helper() -> LLMHelper:
     """获取 LLMHelper 实例，首次调用时初始化（延迟初始化模式）
 
     这种设计避免了模块导入时的初始化，只在实际需要时创建实例。

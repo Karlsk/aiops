@@ -6,7 +6,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from ..node.base import BaseNode
 from apps.models.workflow.models import NodeType
 from apps.models.workflow.models import GraphPlanAgentConfig, ExecutionLog, OperatorLog, PlanSubType, ActionType
-from apps.models.workflow.custom_state import XwGraphAgentState
+from apps.models.workflow.custom_state import XwGraphAgentState, XwGraphAgentOutputState, GraphAgentState, GraphAgentOutputState
 
 from ..node.plan import PlannerNode
 from ..node.worker import WorkerNode
@@ -130,7 +130,7 @@ class XwAgent(BaseNode):
         reflection_node = self.create_reflection_node()
         worker_node = self.create_worker_node()
 
-        builder = StateGraph(XwGraphAgentState)
+        builder = StateGraph(XwGraphAgentState, output_schema=XwGraphAgentOutputState)
         builder.add_node("init_history", self.init_history_node)
         builder.add_node("planner_node", plan_node)
         builder.add_node("reflection_node", reflection_node)
@@ -178,7 +178,12 @@ class XwAgent(BaseNode):
                     output_data=output,
                     execution_time_ms=execution_time
                 ))
-                return map_output_to_state(self.name, output, state_dict)
+                # 将子 Agent 的输出字段直接合并到主流程状态中
+                # 保留原始 state_dict，然后更新子 Agent 返回的字段
+                merged_state = dict(state_dict)
+                merged_state.update(result)  # 直接展开子 Agent 的输出
+                merged_state[f"{self.name}_result"] = output  # 同时保留完整结果用于调试
+                return merged_state
             except Exception as e:
                 execution_time = (time.time() - start_time) * 1000
                 self.log_execution(ExecutionLog(

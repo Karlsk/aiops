@@ -9,7 +9,7 @@ from .base import BaseNode
 from apps.models.workflow.models import NodeType
 from apps.models.workflow.models import ReflectionConfig, ExecutionLog, OperatorLog, PlanSubType
 from apps.utils.utils import convert_state_to_dict, map_output_to_state, extract_json_block
-from apps.llm.llm_helper import _get_llm_helper
+from apps.llm.llm_helper import get_llm_helper
 from apps.llm.prompt.prompt_template import get_reflection_rules_prompt, get_reflection_role_prompt, \
     get_reflection_input_prompt
 
@@ -25,7 +25,7 @@ class ReflectionNode(BaseNode):
     def __init__(self, name: str, config: Dict[str, Any], operator_log: Optional[OperatorLog] = None):
         super().__init__(name, NodeType.Reflection, config, operator_log)
         self.reflection_config = ReflectionConfig(**config)
-        self.llm_helper = _get_llm_helper()
+        self.llm_helper = get_llm_helper()
 
     def validate_config(self) -> bool:
         """验证 Reflection 配置"""

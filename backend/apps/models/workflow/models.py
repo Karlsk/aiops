@@ -74,7 +74,7 @@ class WorkerConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM 节点配置"""
     llm_type: str = Field(default="openai", description="LLM 类型，如 openai, anthropic 等")
-    model_name: str = Field(..., description="模型名称，如 gpt-4, gpt-3.5-turbo 等")
+    model_name: str = Field(default="gpt-4", description="模型名称，如 gpt-4, gpt-3.5-turbo 等")
     base_url: Optional[str] = Field(None, description="自定义模型的基础 URL")
     api_key: Optional[str] = Field(None, description="API 密钥")
     temperature: float = Field(default=0.7, description="温度参数，控制输出的随机性")

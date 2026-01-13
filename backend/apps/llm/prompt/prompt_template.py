@@ -1,5 +1,7 @@
 from apps.models.workflow.models import PlanSubType
 
+from typing import Dict, Any
+
 
 def get_reflection_role_prompt() -> str:
     """构建反思角色提示部分"""
@@ -283,3 +285,58 @@ def get_reflection_rules_prompt(sub_type: PlanSubType) -> str:
 - 你是【调度器】，你的唯一职责是： - 在正确的时间 → 停止 - 在未结束时 → 选择正确的 DAG 节点
         """
     return rules_prompt
+
+
+def get_xw_report_llm(state: Dict[str, Any]) -> str:
+    """构建星网报告 LLM 提示"""
+    import json
+    
+    question = state.get("input", "")
+    context = state.get("plan","")
+    worker_history = state.get("history",[])
+    final_answer = state.get("final_answer", "")
+    
+    # 将 worker_history 转换为字符串（如果是 list）
+    if isinstance(worker_history, list):
+        worker_history = json.dumps(worker_history, ensure_ascii=False, indent=2)
+    
+    # 转义 context 和 worker_history 中的大括号，避免被 LangChain 当成变量
+    if isinstance(context, str):
+        context = context.replace("{", "{{").replace("}", "}}")
+    if isinstance(worker_history, str):
+        worker_history = worker_history.replace("{", "{{").replace("}", "}}")
+    
+    return f"""
+    # Role: 你是一个专业的资深运维诊断专家，擅长从复杂的系统追踪记录中提取关键信息，并结合领域知识库输出结构化、专业化的根因分析报告。
+    # Task: 请根据提供的输入信息，撰写一份格式精美、逻辑严谨的 Markdown 诊断报告。
+    ---
+    # Inputs
+    Question (问题): {question}
+
+    History (诊断追踪记录): {worker_history}
+    
+    Final Answer (结论): {final_answer}
+    
+    Context (知识参考): {context}
+    ---
+    # Output Requirements & Format
+    请严格按照以下 Markdown 格式输出：
+    # 诊断报告标题（一级标题）
+    ## 核心根因 (Root Cause)
+        {final_answer}
+    ## 诊断依据 (Diagnostic Evidence)
+    请结合以下维度进行综合总结，要求逻辑链条清晰（从现象到本质）：
+
+    问题背景： 简述用户反馈的 {question} 核心矛盾。
+    
+    执行链路追踪： 提取 {worker_history} 中的关键步骤（如：调用的接口、返回的关键异常字段、状态码等），说明诊断过程。
+    
+    知识库匹配： 引用 {context} 中的异常逻辑，说明为何上述现象指向了当前的 {final_answer}。
+    
+    推导结论： 明确排除其他可能性的理由。
+    ## 修复方案 (Recommendations)
+    根据根因提供针对性的建议：
+    短期应急： 如何快速恢复业务？
+    长期治理： 如何从配置、架构层面规避此类问题再次发生？
+    """
+
