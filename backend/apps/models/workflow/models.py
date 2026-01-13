@@ -3,6 +3,8 @@ from typing import Dict, Any, List, Optional
 from enum import Enum
 from datetime import datetime
 
+from pydantic.main import IncEx
+
 
 # --- 工作流模型更新 ---
 
@@ -40,14 +42,17 @@ class StateFieldSchema(BaseModel):
     default: Any = Field(None, description="字段默认值")
     description: str = Field("", description="字段描述")
 
+
 class PlanSubType(str, Enum):
     """Worker 节点的子类型"""
     SIMPLE = "simple"
     SUPERVISION = "supervision"
 
+
 class PlannerConfig(BaseModel):
     """Planner 节点配置"""
-    sub_type: PlanSubType = Field(..., description="Planner 子类型：simple(一次性获取plan) 或 supervision（按步骤获取邻居节点）")
+    sub_type: PlanSubType = Field(...,
+                                  description="Planner 子类型：simple(一次性获取plan) 或 supervision（按步骤获取邻居节点）")
     graph_db_name: str = Field(..., description="图数据库database名称")
     event_name: Optional[str] = Field(default=None, description="事件名称")
     api_url: str = Field(default="http://localhost:8000",
@@ -80,14 +85,41 @@ class LLMConfig(BaseModel):
 
 class ReflectionConfig(BaseModel):
     """Reflection 节点配置"""
-    sub_type: PlanSubType = Field(..., description="Reflection 子类型：simple(一次性获取plan) 或 supervision（按步骤获取邻居节点）")
+    sub_type: PlanSubType = Field(...,
+                                  description="Reflection 子类型：simple(一次性获取plan) 或 supervision（按步骤获取邻居节点）")
     # llm_config: Optional[LLMConfig] = Field(..., description="可选的 LLM 配置")
     rag_config: Optional[Dict[str, Any]] = Field(None, description="可选的 RAG 配置")
 
 
+class ActionType(str, Enum):
+    """Worker 节点的子类型"""
+    MCP = "mcp"
+    TOOL = "tool"
+
+
+class ActionConfig(BaseModel):
+    action_type: ActionType = Field(default=ActionType.MCP, description="动作类型：MCP 或 TOOL")
+    mcp_config: Optional[Dict[str, Any]] = Field(default=None, description="MCP 服务器配置")
+    tool_configs: Optional[List[Dict[str, Any]]] = Field(default=None, description="工具配置列表")
+
+
 class AgentConfig(BaseModel):
     """Agent 节点配置（运行时动态编译的工作流）"""
-    workflow_id: str = Field(..., description="引用的工作流 ID")
+    name: str = Field(..., description="智能体名称")
+    action_config: ActionConfig = Field(..., description="智能体动作配置")
+
+
+class GraphConfig(BaseModel):
+    """Graph 节点配置"""
+    graph_db_name: str = Field(..., description="图数据库database名称")
+    api_url: str = Field(default="http://localhost:8000",
+                         description="FastAPI 服务器地址，用于调用图数据库相关接口")
+    proxy_type: str = Field(default="controller", description="图数据库代理类型：controller 或 direct")
+
+
+class GraphPlanAgentConfig(AgentConfig):
+    run_mode: PlanSubType = Field(default=PlanSubType.SIMPLE, description="运行模式：simple 或 supervision")
+    graph_config: GraphConfig = Field(..., description="图数据库配置")
 
 
 class ToolConfig(BaseModel):

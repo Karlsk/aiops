@@ -106,8 +106,8 @@ Dict[
     # 主要输出存储为 {node_name}_result
     state_update[f"{node_name}_result"] = node_output
 
-    # 同时保留原始的逐字段更新（用于兼容旧的使用方式）
-    state_update.update(node_output)
+    # # 同时保留原始的逐字段更新（用于兼容旧的使用方式）
+    # state_update.update(node_output)
 
     # 更新 history（如果存在）
     if state and "history" in state and cur_history is not None:

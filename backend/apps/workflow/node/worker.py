@@ -248,8 +248,15 @@ class WorkerNode(BaseNode):
                             description=f"调用 MCP 工具获取: {goal_dict}"
                         ))
                         cur_steps.append(goal_dict)
-
-
+            
+            # 添加一个低优先级的完成目标，告诉 Agent 完成当前任务后应该返回
+            # 这样 Agent 不会在完成一个工具调用后就调用 terminate
+            if current_goals:  # 只有在有目标时才添加
+                current_goals.append(Goal(
+                    priority=99,
+                    name="完成当前步骤",
+                    description="完成上述所有目标后，调用 terminate 返回结果给调度器。"
+                ))
 
             start_time = time.time()
             try:
@@ -303,7 +310,9 @@ class WorkerNode(BaseNode):
 
                     # 从状态中获取或使用初始化时的 memory
                     short_memory = state_dict.get("history", [])
-                    current_memory = self.memory
+                    current_memory = Memory()
+                    for memory in self.memory.get_memories():
+                        current_memory.add_memory(memory)
                     if short_memory and isinstance(short_memory, list):
                         for item in short_memory:
                             if isinstance(item, dict):
@@ -320,7 +329,7 @@ class WorkerNode(BaseNode):
 
                     # 获取最终的记忆信息
                     memories = final_memory.get_memories()
-
+                    TerraLogUtil.info(f"\n\nMemory: {memories} \n\n")
                     # 从记忆中提取工具调用结果（除了 terminate）
                     results = []
                     for i, memory_item in enumerate(memories):
@@ -329,6 +338,7 @@ class WorkerNode(BaseNode):
                             try:
                                 import json
                                 assistant_content = json.loads(memory_item.get('content', '{}'))
+                                
                                 tool_name = assistant_content.get('tool', '')
                                 
                                 # 跳过 terminate 工具
@@ -380,6 +390,7 @@ class WorkerNode(BaseNode):
                     execution_time_ms=execution_time
                 ))
                 state_dict["worker_status"] = output.get("status", "error")
+                state_dict["seq"] = state_dict["seq"] + 1 if "seq" in state_dict else 1
                 if output.get("status") == "completed":
                     state_dict["worker_result"] = {
                         "steps": output.get("steps", []),
@@ -388,11 +399,11 @@ class WorkerNode(BaseNode):
                     cur_history = [
                         {
                             "type": "user",
-                            "content": output.get("steps", [])
+                            "content": json.dumps(output.get("steps", []), ensure_ascii=False) if output.get("steps", []) else ""
                         },
                         {
-                            "type": "assistant",
-                            "content": output.get("results", [])
+                            "type": "environment",
+                            "content": json.dumps(output.get("results", []), ensure_ascii=False) if output.get("results", []) else ""
                         }
                     ]
                 else:

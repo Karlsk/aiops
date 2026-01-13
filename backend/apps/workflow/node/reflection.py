@@ -59,7 +59,7 @@ class ReflectionNode(BaseNode):
                     ("system", safe_full_prompt),
                     ("human", "{input}")
                 ])
-                TerraLogUtil.info("ReflectionNode invoking LLM with prompt: %s", safe_full_prompt)
+                # TerraLogUtil.info("ReflectionNode invoking LLM with prompt: %s", safe_full_prompt)
                 response = self.llm_helper.invoke(question, prompt=prompt, return_raw=False)
 
                 # 5. 解析响应

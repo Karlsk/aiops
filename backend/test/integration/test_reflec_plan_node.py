@@ -151,6 +151,7 @@ def test_supervision_node_e2e():
         print(f"{key}: {value}")
     print("=" * 50)
 
+
 def run_e2e_by_langgraph(sub_type: PlanSubType = PlanSubType.SIMPLE):
     def init_history_node(state: MyState) -> MyState:
         state["event_name"] = "单圈次单落地星不通"
@@ -222,6 +223,8 @@ def run_e2e_by_langgraph(sub_type: PlanSubType = PlanSubType.SIMPLE):
     print("=" * 60)
     print("执行结果:", result)
     print("测试完成")
+
+
 def run_all_tests():
     print("开始运行所有集成测试...")
     # test_simple_node_e2e()

@@ -7,6 +7,7 @@ from typing_extensions import TypedDict
 from .base import BaseNode
 from apps.models.workflow.models import NodeType
 from apps.models.workflow.models import PlannerConfig, ExecutionLog, OperatorLog
+from apps.workflow.agent.game_react.goal import Goal
 from apps.utils.utils import convert_state_to_dict, generate_plan_json, map_output_to_state
 from apps.utils.logger import TerraLogUtil
 
@@ -53,7 +54,16 @@ class PlannerNode(BaseNode):
                 if not event_name:
                     raise ValueError("event_name is required in state for PlannerNode")
                 goals = state.get("goals", [])
-                step = goals[-1] if self.planner_config.sub_type == "supervision" and goals else event_name
+                if self.planner_config.sub_type == "supervision" and goals:
+                    goal = goals[-1]
+                    if isinstance(goal, Goal):
+                        step = goal.name
+                    elif isinstance(goal, dict):
+                        step = goal.get("name", event_name)
+                    else:
+                        step = str(goal)
+                else:
+                    step = event_name
                 TerraLogUtil.info("PlannerNode step: %s", step)
 
                 api_url = self.planner_config.api_url

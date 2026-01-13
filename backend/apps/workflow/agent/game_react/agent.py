@@ -67,7 +67,7 @@ class Agent:
         # 统一把“助手的决策（response）”与“环境执行结果（result）”写入记忆
         new_memories = [
             {"type": "assistant", "content": response},
-            {"type": "environment", "content": json.dumps(result)}
+            {"type": "environment", "content": json.dumps(result, ensure_ascii=False)}
         ]
         for m in new_memories:
             memory.add_memory(m)
